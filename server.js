@@ -7,12 +7,10 @@ const { Pool } = require('pg');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ Neon 连接字符串（已加 uselibpqcompat=true，与新服务无关，数据库不变）
 const pool = new Pool({
   connectionString: 'postgresql://neondb_owner:npg_k5hlBvdIsPA4@ep-plain-dawn-ayjfr136-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&uselibpqcompat=true'
 });
 
-// 自动建表
 async function initDB() {
   try {
     await pool.query(`
@@ -47,31 +45,6 @@ app.use((req, res, next) => {
 
 app.use(express.static('.'));
 
-function getEmptyProfile() {
-  const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
-    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-    <key>PayloadContent</key>
-    <array></array>
-    <key>PayloadDisplayName</key>
-    <string>Device Info</string>
-    <key>PayloadIdentifier</key>
-    <string>com.example.empty</string>
-    <key>PayloadUUID</key>
-    <string>${uuid}</string>
-    <key>PayloadVersion</key>
-    <integer>1</integer>
-    <key>PayloadType</key>
-    <string>Configuration</string>
-</dict>
-</plist>`;
-}
-
 app.post('/receive', async (req, res) => {
   try {
     const rawBody = req.body;
@@ -89,6 +62,7 @@ app.post('/receive', async (req, res) => {
       }
     } catch (e) {}
 
+    // 存入数据库
     await pool.query(
       `INSERT INTO devices (udid, version, product, serial, ip, city, isp)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -97,15 +71,28 @@ app.post('/receive', async (req, res) => {
 
     console.log('✅ 收到设备并已存入 Neon');
 
-    res.setHeader('Content-Type', 'application/x-apple-aspen-config');
-    res.send(getEmptyProfile());
+    // 🔥 临时：返回一个显示信息的网页，安装后自动跳转
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>设备信息已收到</title></head>
+      <body style="font-family: -apple-system, sans-serif; padding: 20px;">
+        <h2>✅ 设备信息已成功收集</h2>
+        <p><strong>UDID:</strong> ${deviceInfo.UDID || '无'}</p>
+        <p><strong>IP:</strong> ${ip}</p>
+        <p><strong>城市:</strong> ${geo.city}</p>
+        <p>此页面仅用于调试，成功后我们将改回无跳转版本。</p>
+      </body>
+      </html>
+    `;
+    res.send(html);
   } catch (error) {
     console.error('❌ 处理失败:', error);
-    res.setHeader('Content-Type', 'application/x-apple-aspen-config');
-    res.send(getEmptyProfile());
+    res.status(500).send('处理失败，请查看服务器日志');
   }
 });
 
+// 查看所有数据
 app.get('/devices', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM devices ORDER BY received_at DESC');
