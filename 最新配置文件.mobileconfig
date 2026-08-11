@@ -12,30 +12,23 @@
             <key>PayloadUUID</key>
             <string>3C4DC7D2-E475-3375-489C-0BB8D737A654</string>
             <key>PayloadIdentifier</key>
-            <string>com.example.device-info</string>
+            <string>com.test.udid</string>
             <key>URL</key>
             <string>https://jx-log.onrender.com/receive</string>
             <key>DeviceAttributes</key>
             <array>
                 <string>UDID</string>
-                <string>IMEI</string>
-                <string>ICCID</string>
-                <string>VERSION</string>
-                <string>PRODUCT</string>
-                <string>SERIAL</string>
-                <string>DEVICE_NAME</string>
-                <string>MODEL</string>
             </array>
         </dict>
     </array>
     <key>PayloadDisplayName</key>
-    <string>设备信息采集</string>
+    <string>UDID Test</string>
     <key>PayloadIdentifier</key>
-    <string>com.example.device-info</string>
+    <string>com.test.udid</string>
     <key>PayloadUUID</key>
     <string>3C4DC7D2-E475-3375-489C-0BB8D737A653</string>
     <key>PayloadOrganization</key>
-    <string>My Org</string>
+    <string>Test</string>
     <key>PayloadVersion</key>
     <integer>1</integer>
     <key>PayloadType</key>
