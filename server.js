@@ -7,7 +7,7 @@ const { Pool } = require('pg');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ 已加上 uselibpqcompat=true
+// ✅ Neon 连接字符串（已加 uselibpqcompat=true，与新服务无关，数据库不变）
 const pool = new Pool({
   connectionString: 'postgresql://neondb_owner:npg_k5hlBvdIsPA4@ep-plain-dawn-ayjfr136-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&uselibpqcompat=true'
 });
