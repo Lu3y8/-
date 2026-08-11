@@ -35,7 +35,28 @@ async function initDB() {
 app.use(cors());
 app.use(express.text({ type: '*/*' }));
 
-// ✅ 直接把描述文件内容写死在路由里，确保能下载
+// 首页提示
+app.get('/', (req, res) => {
+  res.send('<h2>✅ 服务运行中</h2><p>安装描述文件请用 Safari 打开: <a href="/install">点击这里</a> 或直接访问 /profile.mobileconfig</p>');
+});
+
+// 安装引导页（解决部分浏览器无法直接下载的问题）
+app.get('/install', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>安装描述文件</title></head>
+    <body style="font-family: -apple-system, sans-serif; padding: 20px;">
+      <h2>📲 安装描述文件</h2>
+      <p>点击下面的按钮下载配置描述文件，然后去 <b>设置 → 通用 → VPN 与设备管理</b> 中安装。</p>
+      <a href="/profile.mobileconfig" style="display:inline-block;padding:12px 24px;background:#007AFF;color:white;text-decoration:none;border-radius:8px;font-size:18px;">📥 下载描述文件</a>
+      <p style="margin-top:20px;color:gray;">如果无法下载，请复制以下链接到 Safari 打开：<br><code>https://jx-peizhi.onrender.com/profile.mobileconfig</code></p>
+    </body>
+    </html>
+  `);
+});
+
+// 核心：动态生成描述文件，确保 MIME 类型正确
 app.get('/profile.mobileconfig', (req, res) => {
   const mobileconfig = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -82,10 +103,7 @@ app.get('/profile.mobileconfig', (req, res) => {
   res.send(mobileconfig);
 });
 
-// 静态文件（保留，备用）
-app.use(express.static('.'));
-
-// 手机测试页面
+// 测试页面
 app.get('/test', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -93,28 +111,18 @@ app.get('/test', (req, res) => {
     <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>设备数据测试</title></head>
     <body style="font-family: -apple-system, sans-serif; padding: 20px;">
       <h2>🔧 设备数据上报测试</h2>
-      <p>点击下面的按钮，将模拟发送一条测试数据到服务器。</p>
-      <button onclick="sendTest()" style="padding: 12px 24px; font-size: 18px; background: #007AFF; color: white; border: none; border-radius: 8px;">📤 发送测试数据</button>
-      <p id="status" style="margin-top: 20px;"></p>
+      <button onclick="sendTest()" style="padding:12px 24px;font-size:18px;background:#007AFF;color:white;border:none;border-radius:8px;">📤 发送测试数据</button>
+      <p id="status"></p>
       <script>
         async function sendTest() {
           const status = document.getElementById('status');
           status.textContent = '发送中...';
           try {
             const xml = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>UDID</key><string>test-udid-99999</string><key>VERSION</key><string>17.0</string><key>PRODUCT</key><string>iPhone12,1</string><key>SERIAL</key><string>test-serial-123</string></dict></plist>';
-            const res = await fetch('/receive', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/x-apple-aspen-config' },
-              body: xml
-            });
-            if (res.ok) {
-              status.innerHTML = '✅ 测试数据发送成功！<br>现在去 <a href="/devices">/devices</a> 查看。';
-            } else {
-              status.textContent = '❌ 发送失败，状态码：' + res.status;
-            }
-          } catch(e) {
-            status.textContent = '❌ 请求出错：' + e.message;
-          }
+            const res = await fetch('/receive', { method:'POST', headers:{'Content-Type':'application/x-apple-aspen-config'}, body:xml });
+            if(res.ok) status.innerHTML = '✅ 成功！<a href="/devices">查看数据</a>';
+            else status.textContent = '❌ 失败';
+          } catch(e) { status.textContent = '❌ '+e.message; }
         }
       </script>
     </body>
@@ -122,8 +130,9 @@ app.get('/test', (req, res) => {
   `);
 });
 
-// 接收设备数据
+// 接收数据（增强日志）
 app.post('/receive', async (req, res) => {
+  console.log('📥 [接收] 收到 POST 请求');
   try {
     let deviceInfo = {};
     if (req.is('application/x-apple-aspen-config') || req.is('text/*')) {
@@ -131,6 +140,7 @@ app.post('/receive', async (req, res) => {
     } else {
       deviceInfo = plist.parse(req.body);
     }
+    console.log('📋 [解析]', JSON.stringify(deviceInfo));
 
     let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     if (ip.includes(',')) ip = ip.split(',')[0].trim();
@@ -139,36 +149,30 @@ app.post('/receive', async (req, res) => {
     let geo = { city: '未知', isp: '未知' };
     try {
       const geoRes = await axios.get(`http://ip-api.com/json/${ip}?fields=status,city,isp`, { timeout: 3000 });
-      if (geoRes.data.status === 'success') {
-        geo = { city: geoRes.data.city, isp: geoRes.data.isp };
-      }
+      if (geoRes.data.status === 'success') geo = { city: geoRes.data.city, isp: geoRes.data.isp };
     } catch (e) {}
 
     await pool.query(
-      `INSERT INTO devices (udid, version, product, serial, ip, city, isp)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [deviceInfo.UDID || '', deviceInfo.VERSION || '', deviceInfo.PRODUCT || '', deviceInfo.SERIAL || '', ip, geo.city, geo.isp]
+      `INSERT INTO devices (udid, version, product, serial, ip, city, isp) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [deviceInfo.UDID||'', deviceInfo.VERSION||'', deviceInfo.PRODUCT||'', deviceInfo.SERIAL||'', ip, geo.city, geo.isp]
     );
 
-    console.log('✅ 收到设备并已存入 Neon');
-
-    // 真实设备：302 重定向到结果页
-    const udid = encodeURIComponent(deviceInfo.UDID || '无');
-    res.redirect(302, `/result?udid=${udid}&ip=${encodeURIComponent(ip)}&city=${encodeURIComponent(geo.city)}`);
+    console.log('✅ [入库] UDID:', deviceInfo.UDID, 'IP:', ip);
+    res.redirect(302, `/result?udid=${encodeURIComponent(deviceInfo.UDID||'')}&ip=${encodeURIComponent(ip)}&city=${encodeURIComponent(geo.city)}`);
   } catch (error) {
-    console.error('❌ 处理失败:', error);
+    console.error('❌ [处理失败]', error);
     res.redirect(302, '/result?error=1');
   }
 });
 
-// 结果展示页
+// 结果页
 app.get('/result', (req, res) => {
   const { udid, ip, city, error } = req.query;
   if (error) return res.send('<h2>❌ 数据接收失败</h2>');
-  res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family: -apple-system, sans-serif; padding: 20px;"><h2>✅ 设备信息已成功收集</h2><p><strong>UDID:</strong> ${udid}</p><p><strong>IP:</strong> ${ip}</p><p><strong>城市:</strong> ${city}</p><p>调试完成后将恢复无跳转版本。</p></body></html>`);
+  res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family:-apple-system,sans-serif;padding:20px;"><h2>✅ 设备信息已收集</h2><p><strong>UDID:</strong> ${udid}</p><p><strong>IP:</strong> ${ip}</p><p><strong>城市:</strong> ${city}</p></body></html>`);
 });
 
-// 查看所有数据
+// 数据查看
 app.get('/devices', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM devices ORDER BY received_at DESC');
@@ -178,13 +182,6 @@ app.get('/devices', async (req, res) => {
   }
 });
 
-// 根路径友好提示
-app.get('/', (req, res) => {
-  res.send('<h2>✅ 服务运行中</h2><p>请使用正确的地址安装描述文件。</p>');
-});
-
 initDB().then(() => {
-  app.listen(PORT, () => {
-    console.log(`✅ 服务运行在端口 ${PORT}`);
-  });
+  app.listen(PORT, () => console.log(`✅ 服务运行在端口 ${PORT}`));
 });
