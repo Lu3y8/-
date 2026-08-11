@@ -6,43 +6,39 @@
     <array>
         <dict>
             <key>PayloadType</key>
-            <string>com.apple.certificatetransparency</string>
+            <string>com.apple.profile-service</string>
             <key>PayloadVersion</key>
             <integer>1</integer>
-            <key>PayloadIdentifier</key>
-            <string>com.your-company.profile-service.config</string>
             <key>PayloadUUID</key>
-            <string>3C4DC7D2-E475-3375-489C-0BB8D737A653</string>
-            <key>PayloadEnabled</key>
-            <true/>
+            <string>3C4DC7D2-E475-3375-489C-0BB8D737A654</string>
+            <key>PayloadIdentifier</key>
+            <string>com.your-company.profile-service.payload</string>
+            <key>URL</key>
+            <string>https://jx-log.onrender.com/receive</string>
+            <key>DeviceAttributes</key>
+            <array>
+                <string>UDID</string>
+                <string>IMEI</string>
+                <string>ICCID</string>
+                <string>VERSION</string>
+                <string>PRODUCT</string>
+                <string>SERIAL</string>
+                <string>DEVICE_NAME</string>
+                <string>MODEL</string>
+            </array>
         </dict>
     </array>
-    <key>PayloadType</key>
-    <string>Profile Service</string>
-    <key>URL</key>
-    <string>https://你的render域名/receive</string>
-    <key>DeviceAttributes</key>
-    <array>
-        <string>UDID</string>
-        <string>IMEI</string>
-        <string>ICCID</string>
-        <string>VERSION</string>
-        <string>PRODUCT</string>
-        <string>SERIAL</string>
-        <string>DEVICE_NAME</string>
-        <string>MODEL</string>
-    </array>
-    <key>PayloadOrganization</key>
-    <string>Your Organization</string>
     <key>PayloadDisplayName</key>
     <string>设备信息采集</string>
-    <key>PayloadVersion</key>
-    <integer>1</integer>
-    <key>PayloadUUID</key>
-    <string>3C4DC7D2-E475-3375-489C-0BB8D737A653</string>
     <key>PayloadIdentifier</key>
     <string>com.your-company.profile-service</string>
-    <key>PayloadDescription</key>
-    <string>安装此配置文件以获取设备信息</string>
+    <key>PayloadUUID</key>
+    <string>3C4DC7D2-E475-3375-489C-0BB8D737A653</string>
+    <key>PayloadOrganization</key>
+    <string>Your Organization</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadType</key>
+    <string>Profile Service</string>
 </dict>
 </plist>
