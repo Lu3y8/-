@@ -38,10 +38,10 @@ app.post('/receive', async (req, res) => {
 
         devices.push(fullInfo);
         console.log('✅ 收到设备:', JSON.stringify(fullInfo, null, 2));
-        res.redirect(301, '/success.html');
+        res.send('✅ 设备信息已收到，请关闭此页面');
     } catch (error) {
         console.error('❌ 失败:', error);
-        res.redirect(301, '/error.html');
+        res.send('❌ 接收失败，请重试');
     }
 });
 
@@ -51,5 +51,4 @@ app.get('/devices', (req, res) => {
 
 app.listen(PORT, () => {
     console.log(`✅ 服务运行在端口 ${PORT}`);
-    console.log(`📱 配置下载地址: https://localhost:${PORT}/device-info.mobileconfig`);
 });
