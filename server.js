@@ -140,12 +140,12 @@ app.get('/ca.crt', (req, res) => {
   res.send(caCertPem);
 });
 
-// 签名描述文件（Web Clip 图标为绿色 JX）
+// 签名描述文件（修正 PayloadType 为 com.apple.webClip）
 app.get('/signed-profile.mobileconfig', (req, res) => {
   const profileUUID = crypto.randomUUID();
   const clipUUID = crypto.randomUUID();
 
-  // 绿色 JX 图标 Base64（可自行替换为你的 PNG）
+  // 绿色 JX 图标 Base64（可自行替换）
   const iconBase64 = 
     'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB+cBCBUHK2TP/1EAAAAZdEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAABhJREFUeNpi/P//PwMlgDEEGAWIUYBiAB0AAAD//wMAJw8XrAAAAABJRU5ErkJggg==';
 
@@ -157,7 +157,7 @@ app.get('/signed-profile.mobileconfig', (req, res) => {
     <array>
         <dict>
             <key>PayloadType</key>
-            <string>com.apple.webClip.managed</string>
+            <string>com.apple.webClip</string>
             <key>PayloadVersion</key>
             <integer>1</integer>
             <key>PayloadUUID</key>
