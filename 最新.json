@@ -1,6 +1,7 @@
 {
   "name": "device-receiver",
   "version": "1.0.0",
+  "description": "接收 iOS 配置文件上传的设备信息",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
