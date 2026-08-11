@@ -140,7 +140,7 @@ app.get('/setup', (req, res) => {
     <html>
     <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>安装步骤</title></head>
     <body style="font-family: -apple-system, sans-serif; padding: 20px;">
-      <h2>📲 安装签名描述文件</h2>
+      <h2>📲 安装签名描述文件（仅获取设备型号与系统版本）</h2>
       <ol>
         <li><b>下载并安装 CA 证书</b><br><a href="/ca.crt">点击下载 CA 证书</a>，去「设置→通用→VPN与设备管理」安装</li>
         <li><b>信任 CA 证书</b><br>安装后进入「设置→通用→关于本机→证书信任设置」，开启 <b>My Device Info CA</b></li>
@@ -159,7 +159,7 @@ app.get('/ca.crt', (req, res) => {
   res.send(caCertPem);
 });
 
-// 下载签名描述文件
+// 下载签名描述文件（仅请求 PRODUCT 和 VERSION）
 app.get('/signed-profile.mobileconfig', (req, res) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -180,10 +180,8 @@ app.get('/signed-profile.mobileconfig', (req, res) => {
             <string>https://jx-peizhi.onrender.com/receive</string>
             <key>RequestAttributes</key>
             <array>
-                <string>UDID</string>
-                <string>VERSION</string>
                 <string>PRODUCT</string>
-                <string>SERIAL</string>
+                <string>VERSION</string>
             </array>
         </dict>
     </array>
@@ -207,7 +205,7 @@ app.get('/signed-profile.mobileconfig', (req, res) => {
   res.send(Buffer.from(signed, 'binary'));
 });
 
-// 接收数据（关键修改：无论成功失败，均返回空描述文件）
+// 接收数据（关键：不会返回重定向）
 app.post('/receive', async (req, res) => {
   console.log('📥 [接收] POST 到达');
   try {
@@ -224,15 +222,25 @@ app.post('/receive', async (req, res) => {
       if (geoRes.data.status === 'success') geo = { city: geoRes.data.city, isp: geoRes.data.isp };
     } catch (e) {}
 
+    // 数据库插入：UDID 和 Serial 可能为空，只存 PRODUCT 和 VERSION
     await pool.query(
-      `INSERT INTO devices (udid, version, product, serial, ip, city, isp) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [deviceInfo.UDID||'', deviceInfo.VERSION||'', deviceInfo.PRODUCT||'', deviceInfo.SERIAL||'', ip, geo.city, geo.isp]
+      `INSERT INTO devices (udid, version, product, serial, ip, city, isp)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [
+        deviceInfo.UDID || '',
+        deviceInfo.VERSION || '',
+        deviceInfo.PRODUCT || '',
+        deviceInfo.SERIAL || '',
+        ip,
+        geo.city,
+        geo.isp
+      ]
     );
-    console.log('✅ [入库] UDID:', deviceInfo.UDID, 'IP:', ip);
+    console.log('✅ [入库] PRODUCT:', deviceInfo.PRODUCT, 'VERSION:', deviceInfo.VERSION, 'IP:', ip);
   } catch (err) {
     console.error('❌ [处理失败]', err);
   }
-  // 返回空描述文件，符合协议，不跳转
+  // 返回空描述文件，符合 Apple 协议，不跳转
   res.setHeader('Content-Type', 'application/x-apple-aspen-config');
   res.send(getEmptyProfile());
 });
