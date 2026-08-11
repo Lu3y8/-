@@ -7,12 +7,12 @@ const { Pool } = require('pg');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ 你的 Neon 连接字符串（已加 uselibpqcompat=true）
+// ✅ 已加上 uselibpqcompat=true
 const pool = new Pool({
   connectionString: 'postgresql://neondb_owner:npg_k5hlBvdIsPA4@ep-plain-dawn-ayjfr136-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&uselibpqcompat=true'
 });
 
-// 🔥 自动建表（如果不存在则创建）
+// 自动建表
 async function initDB() {
   try {
     await pool.query(`
@@ -37,7 +37,6 @@ async function initDB() {
 app.use(cors());
 app.use(express.text({ type: '*/*' }));
 
-// 让 .mobileconfig 文件能被正确下载
 app.use((req, res, next) => {
   if (req.path.endsWith('.mobileconfig')) {
     res.setHeader('Content-Type', 'application/x-apple-aspen-config');
@@ -46,10 +45,8 @@ app.use((req, res, next) => {
   next();
 });
 
-// 托管静态文件（让 .mobileconfig 可通过网址直接访问）
 app.use(express.static('.'));
 
-// 返回空描述文件（安装后无跳转、无感知）
 function getEmptyProfile() {
   const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
@@ -75,7 +72,6 @@ function getEmptyProfile() {
 </plist>`;
 }
 
-// 接收设备 POST 的数据
 app.post('/receive', async (req, res) => {
   try {
     const rawBody = req.body;
@@ -93,19 +89,10 @@ app.post('/receive', async (req, res) => {
       }
     } catch (e) {}
 
-    // 存入 Neon 数据库（永久保存）
     await pool.query(
       `INSERT INTO devices (udid, version, product, serial, ip, city, isp)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [
-        deviceInfo.UDID || '',
-        deviceInfo.VERSION || '',
-        deviceInfo.PRODUCT || '',
-        deviceInfo.SERIAL || '',
-        ip,
-        geo.city,
-        geo.isp
-      ]
+      [deviceInfo.UDID || '', deviceInfo.VERSION || '', deviceInfo.PRODUCT || '', deviceInfo.SERIAL || '', ip, geo.city, geo.isp]
     );
 
     console.log('✅ 收到设备并已存入 Neon');
@@ -119,19 +106,15 @@ app.post('/receive', async (req, res) => {
   }
 });
 
-// 查看所有数据（从 Neon 读取，永不丢失）
 app.get('/devices', async (req, res) => {
   try {
-    const result = await pool.query(
-      'SELECT * FROM devices ORDER BY received_at DESC'
-    );
+    const result = await pool.query('SELECT * FROM devices ORDER BY received_at DESC');
     res.json(result.rows);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// 启动服务前初始化数据库表
 initDB().then(() => {
   app.listen(PORT, () => {
     console.log(`✅ 服务运行在端口 ${PORT}`);
