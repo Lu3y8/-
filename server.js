@@ -35,9 +35,9 @@ async function initDB() {
 app.use(cors());
 app.use(express.text({ type: '*/*' }));
 
-// 🔍 全局请求日志（记录每一个请求，方便排查）
+// 全请求日志
 app.use((req, res, next) => {
-  console.log(`📡 [${new Date().toISOString()}] ${req.method} ${req.path} 来源 IP: ${req.ip}`);
+  console.log(`📡 [${new Date().toISOString()}] ${req.method} ${req.path}  IP: ${req.ip}  UA: ${req.get('user-agent')?.substring(0, 50)}`);
   next();
 });
 
@@ -46,21 +46,26 @@ app.get('/', (req, res) => {
   res.send('<h2>✅ 服务运行中</h2><p>安装描述文件: <a href="/install">点击这里</a></p>');
 });
 
-// 连接检查（用于验证设备是否能连上服务器）
+// 连接检查
 app.get('/check', (req, res) => {
   res.send('OK - 连接成功');
 });
 
-// 安装引导页
+// 安装引导页（强化隐私提示）
 app.get('/install', (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html>
     <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>安装描述文件</title></head>
-    <body style="font-family: -apple-system, sans-serif; padding: 20px;">
-      <h2>📲 安装描述文件</h2>
-      <p>点击下面的按钮下载配置描述文件，然后去 <b>设置 → 通用 → VPN 与设备管理</b> 中安装。</p>
+    <body style="font-family: -apple-system, sans-serif; padding: 20px; background: #f5f5f5;">
+      <h2>📲 安装设备信息描述文件</h2>
+      <p>点击下方按钮下载描述文件，然后前往 <b>设置 → 通用 → VPN 与设备管理</b> 进行安装。</p>
       <a href="/profile.mobileconfig" style="display:inline-block;padding:12px 24px;background:#007AFF;color:white;text-decoration:none;border-radius:8px;font-size:18px;">📥 下载描述文件</a>
+      <div style="margin-top: 20px; background: white; padding: 15px; border-radius: 8px; border-left: 4px solid #ff9500;">
+        <strong>⚠️ 安装时请注意：</strong><br>
+        系统会弹出隐私提示“<b>此描述文件会向网站发送您的设备信息</b>”，<br>
+        请务必点击 <b style="color: #007AFF;">“允许”</b>，否则无法收集设备数据。
+      </div>
       <p style="margin-top:20px;">如果无法下载，复制以下链接到 Safari 打开：<br><code>https://jx-peizhi.onrender.com/profile.mobileconfig</code></p>
     </body>
     </html>
@@ -141,9 +146,10 @@ app.get('/test', (req, res) => {
   `);
 });
 
-// 接收数据（增强日志）
+// 接收数据（记录完整请求头）
 app.post('/receive', async (req, res) => {
-  console.log('📥 [接收] 收到 POST 请求，Body 长度:', req.body ? req.body.length : 0);
+  console.log('📥 [接收] POST 请求到达');
+  console.log('   完整请求头:', JSON.stringify(req.headers));
   try {
     let deviceInfo = {};
     if (req.is('application/x-apple-aspen-config') || req.is('text/*')) {
