@@ -13,17 +13,16 @@ const pool = new Pool({
   connectionString: 'postgresql://neondb_owner:npg_k5hlBvdIsPA4@ep-plain-dawn-ayjfr136-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&uselibpqcompat=true'
 });
 
-// 自签名 CA 和签名证书的全局缓存（只生成一次）
-let caCertPem, caKeyPem, signCertPem, signKeyPem;
+// 自签名证书（全局缓存）
+let caCertPem, signCertPem, signKeyPem;
 
 function generateCerts() {
-  // 生成 CA 密钥对
   const caKeys = forge.pki.rsa.generateKeyPair(2048);
   const caCert = forge.pki.createCertificate();
   caCert.publicKey = caKeys.publicKey;
   caCert.serialNumber = '01';
   caCert.validity.notBefore = new Date();
-  caCert.validity.notAfter = new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000); // 10 年
+  caCert.validity.notAfter = new Date(Date.now() + 3650 * 24 * 60 * 60 * 1000);
   caCert.setSubject([{ name: 'commonName', value: 'My Device Info CA' }]);
   caCert.setIssuer(caCert.subject.attributes);
   caCert.setExtensions([
@@ -32,7 +31,6 @@ function generateCerts() {
   ]);
   caCert.sign(caKeys.privateKey, forge.md.sha256.create());
 
-  // 生成签名密钥对
   const signKeys = forge.pki.rsa.generateKeyPair(2048);
   const signCert = forge.pki.createCertificate();
   signCert.publicKey = signKeys.publicKey;
@@ -48,15 +46,13 @@ function generateCerts() {
   signCert.sign(caKeys.privateKey, forge.md.sha256.create());
 
   caCertPem = forge.pki.certificateToPem(caCert);
-  caKeyPem = forge.pki.privateKeyToPem(caKeys.privateKey);
   signCertPem = forge.pki.certificateToPem(signCert);
   signKeyPem = forge.pki.privateKeyToPem(signKeys.privateKey);
 }
 
-// 签名描述文件函数
-function signMobileconfig(xmlContent) {
+function signMobileconfig(xml) {
   const p7 = forge.pkcs7.createSignedData();
-  p7.content = new forge.util.ByteBuffer(xmlContent, 'utf8');
+  p7.content = new forge.util.ByteBuffer(xml, 'utf8');
   p7.addCertificate(forge.pki.certificateFromPem(signCertPem));
   p7.addSigner({
     key: forge.pki.privateKeyFromPem(signKeyPem),
@@ -72,7 +68,33 @@ function signMobileconfig(xmlContent) {
   return forge.asn1.toDer(p7.toAsn1()).getBytes();
 }
 
-// 初始化数据库和证书
+// 返回空描述文件（符合协议，无跳转）
+function getEmptyProfile() {
+  const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array></array>
+    <key>PayloadDisplayName</key>
+    <string>Done</string>
+    <key>PayloadIdentifier</key>
+    <string>com.example.done</string>
+    <key>PayloadUUID</key>
+    <string>${uuid}</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+</dict>
+</plist>`;
+}
+
+// 初始化
 async function initAll() {
   try {
     await pool.query(`
@@ -102,7 +124,7 @@ app.use(express.text({ type: '*/*' }));
 
 // 请求日志
 app.use((req, res, next) => {
-  console.log(`📡 [${new Date().toISOString()}] ${req.method} ${req.path}`);
+  console.log(`📡 [${new Date().toISOString()}] ${req.method} ${req.path}  IP: ${req.ip}  UA: ${(req.get('user-agent') || '').substring(0, 60)}`);
   next();
 });
 
@@ -111,7 +133,7 @@ app.get('/', (req, res) => {
   res.send('<h2>✅ 服务运行中</h2><p>请访问 <a href="/setup">/setup</a> 按指引安装</p>');
 });
 
-// 安装指引页
+// 安装指引
 app.get('/setup', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -119,20 +141,10 @@ app.get('/setup', (req, res) => {
     <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>安装步骤</title></head>
     <body style="font-family: -apple-system, sans-serif; padding: 20px;">
       <h2>📲 安装签名描述文件</h2>
-      <p>请严格按照顺序操作：</p>
       <ol>
-        <li>
-          <b>下载并安装 CA 证书</b><br>
-          <a href="/ca.crt" style="color:#007AFF;">点击下载 CA 证书</a><br>
-          下载后前往 <b>设置 → 通用 → VPN 与设备管理</b> 安装该证书。<br>
-          安装后，进入 <b>设置 → 通用 → 关于本机 → 证书信任设置</b>，<br>
-          找到 <b>"My Device Info CA"</b>，开启信任开关。
-        </li>
-        <li style="margin-top:20px;">
-          <b>下载并安装描述文件</b><br>
-          <a href="/signed-profile.mobileconfig" style="color:#007AFF;">点击下载签名描述文件</a><br>
-          下载后前往 <b>设置 → 通用 → VPN 与设备管理</b> 安装。
-        </li>
+        <li><b>下载并安装 CA 证书</b><br><a href="/ca.crt">点击下载 CA 证书</a>，去「设置→通用→VPN与设备管理」安装</li>
+        <li><b>信任 CA 证书</b><br>安装后进入「设置→通用→关于本机→证书信任设置」，开启 <b>My Device Info CA</b></li>
+        <li><b>下载并安装描述文件</b><br><a href="/signed-profile.mobileconfig">点击下载签名描述文件</a>，去「设置→通用→VPN与设备管理」安装</li>
       </ol>
       <p>完成后，数据会自动发送。查看数据：<a href="/devices">/devices</a></p>
     </body>
@@ -147,7 +159,7 @@ app.get('/ca.crt', (req, res) => {
   res.send(caCertPem);
 });
 
-// 下载签名后的描述文件
+// 下载签名描述文件
 app.get('/signed-profile.mobileconfig', (req, res) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -195,10 +207,9 @@ app.get('/signed-profile.mobileconfig', (req, res) => {
   res.send(Buffer.from(signed, 'binary'));
 });
 
-// 原有的接收、结果、查看路由保持不变（略，但与之前相同）
-// 这里保持你之前无跳转返回空描述文件的逻辑，因为签名后数据会自动POST
+// 接收数据（关键修改：无论成功失败，均返回空描述文件）
 app.post('/receive', async (req, res) => {
-  console.log('📥 [接收] POST 请求到达');
+  console.log('📥 [接收] POST 到达');
   try {
     const deviceInfo = plist.parse(req.body);
     console.log('📋 [解析]', JSON.stringify(deviceInfo));
@@ -217,16 +228,16 @@ app.post('/receive', async (req, res) => {
       `INSERT INTO devices (udid, version, product, serial, ip, city, isp) VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [deviceInfo.UDID||'', deviceInfo.VERSION||'', deviceInfo.PRODUCT||'', deviceInfo.SERIAL||'', ip, geo.city, geo.isp]
     );
-    console.log('✅ [入库] UDID:', deviceInfo.UDID);
-    // 返回空描述文件，不跳转
-    res.setHeader('Content-Type', 'application/x-apple-aspen-config');
-    res.send(`<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>PayloadContent</key><array/></dict></plist>`);
+    console.log('✅ [入库] UDID:', deviceInfo.UDID, 'IP:', ip);
   } catch (err) {
-    console.error('❌ 处理失败:', err);
-    res.status(500).end();
+    console.error('❌ [处理失败]', err);
   }
+  // 返回空描述文件，符合协议，不跳转
+  res.setHeader('Content-Type', 'application/x-apple-aspen-config');
+  res.send(getEmptyProfile());
 });
 
+// 查看数据
 app.get('/devices', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM devices ORDER BY received_at DESC');
