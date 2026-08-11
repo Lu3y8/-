@@ -14,7 +14,7 @@
             <key>PayloadIdentifier</key>
             <string>com.example.udid-collect</string>
             <key>URL</key>
-            <string>https://xvzwdt4b9g.onrender.com/receive</string>
+            <string>https://jx-peizhi.onrender.com/receive</string>
             <key>RequestAttributes</key>
             <array>
                 <string>UDID</string>
