@@ -40,7 +40,7 @@ app.get('/', (req, res) => {
   res.send('<h2>JX 网络验证</h2><p>请访问 <a href="/setup">配置页面</a> 完成设置</p>');
 });
 
-// 配置指引页（无需 CA 证书）
+// 配置指引页
 app.get('/setup', (req, res) => {
   const ts = Date.now();
   res.send(`
@@ -54,7 +54,8 @@ app.get('/setup', (req, res) => {
         <li><b>安装网络配置</b><br>
           <a href="/profile.mobileconfig?v=${ts}" style="color:#007AFF;">下载网络配置</a>，前往「设置→通用→VPN与设备管理」安装。<br>
           <span style="color:gray;">安装时若提示“未验证”，请放心点击“安装”即可。</span><br>
-          安装后，桌面会出现 <b>“JX网络验证”</b> 图标。
+          安装后，桌面会出现 <b>“JX网络验证”</b> 图标。<br>
+          <b>如果没看到，请滑动到桌面最后一页或尝试重启手机。</b>
         </li>
         <li><b>激活服务</b><br>
           点击桌面上的 <b>“JX网络验证”</b> 图标，页面提示验证通过即可。
@@ -66,14 +67,14 @@ app.get('/setup', (req, res) => {
   `);
 });
 
-// 下载未签名描述文件（Web Clip）
+// 下载未签名描述文件（Web Clip，有效图标）
 app.get('/profile.mobileconfig', (req, res) => {
   const profileUUID = crypto.randomUUID();
   const clipUUID = crypto.randomUUID();
 
-  // 绿色 JX 图标 Base64（可替换）
+  // 一个绝对有效的透明图标 Base64（最小 PNG 图片）
   const iconBase64 =
-    'iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAAAXNSR0IArs4c6QAAAAlwSFlzAAALEwAACxMBAJqcGAAAAAd0SU1FB+cBCBUHK2TP/1EAAAAZdEVYdENvbW1lbnQAQ3JlYXRlZCB3aXRoIEdJTVBXgQ4XAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAABhJREFUeNpi/P//PwMlgDEEGAWIUYBiAB0AAAD//wMAJw8XrAAAAABJRU5ErkJggg==';
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVQI12NgAAIABQABNjN9GAAAAABJRU5ErkJggg==';
 
   const profile = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
