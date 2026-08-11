@@ -12,7 +12,7 @@
             <key>PayloadUUID</key>
             <string>3C4DC7D2-E475-3375-489C-0BB8D737A654</string>
             <key>PayloadIdentifier</key>
-            <string>com.simple.device-info</string>
+            <string>com.example.udid-imei</string>
             <key>URL</key>
             <string>https://jx-log.onrender.com/receive</string>
             <key>DeviceAttributes</key>
@@ -25,7 +25,7 @@
     <key>PayloadDisplayName</key>
     <string>设备信息采集</string>
     <key>PayloadIdentifier</key>
-    <string>com.simple.profile</string>
+    <string>com.example.profile</string>
     <key>PayloadUUID</key>
     <string>3C4DC7D2-E475-3375-489C-0BB8D737A653</string>
     <key>PayloadOrganization</key>
