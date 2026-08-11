@@ -34,6 +34,7 @@ async function initDB() {
 
 app.use(cors());
 app.use(express.text({ type: '*/*' }));
+app.use(express.json()); // 支持 JSON 格式的测试请求
 
 app.use((req, res, next) => {
   if (req.path.endsWith('.mobileconfig')) {
@@ -45,10 +46,56 @@ app.use((req, res, next) => {
 
 app.use(express.static('.'));
 
+// 📱 手机测试页面（访问 /test 即可看到按钮）
+app.get('/test', (req, res) => {
+  res.send(`
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>设备数据测试</title></head>
+    <body style="font-family: -apple-system, sans-serif; padding: 20px;">
+      <h2>🔧 设备数据上报测试</h2>
+      <p>点击下面的按钮，将模拟发送一条测试数据到服务器。</p>
+      <button onclick="sendTest()" style="padding: 12px 24px; font-size: 18px; background: #007AFF; color: white; border: none; border-radius: 8px;">📤 发送测试数据</button>
+      <p id="status" style="margin-top: 20px;"></p>
+      <script>
+        async function sendTest() {
+          const status = document.getElementById('status');
+          status.textContent = '发送中...';
+          try {
+            const xml = '<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>UDID</key><string>test-udid-99999</string><key>VERSION</key><string>17.0</string><key>PRODUCT</key><string>iPhone12,1</string><key>SERIAL</key><string>test-serial-123</string></dict></plist>';
+            const res = await fetch('/receive', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-apple-aspen-config' },
+              body: xml
+            });
+            if (res.ok) {
+              status.innerHTML = '✅ 测试数据发送成功！<br>现在去 <a href="/devices">/devices</a> 查看，应该能看到一条 UDID 为 test-udid-99999 的数据。';
+            } else {
+              status.textContent = '❌ 发送失败，状态码：' + res.status;
+            }
+          } catch(e) {
+            status.textContent = '❌ 请求出错：' + e.message;
+          }
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+// 接收数据的核心接口（支持 XML 和 JSON 测试）
 app.post('/receive', async (req, res) => {
   try {
-    const rawBody = req.body;
-    const deviceInfo = plist.parse(rawBody);
+    let deviceInfo = {};
+    // 根据 Content-Type 解析
+    if (req.is('application/x-apple-aspen-config') || req.is('text/*')) {
+      deviceInfo = plist.parse(req.body);
+    } else if (req.is('application/json')) {
+      deviceInfo = req.body; // 来自测试页面的 JSON
+    } else {
+      // 尝试作为 XML 解析
+      deviceInfo = plist.parse(req.body);
+    }
 
     let ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
     if (ip.includes(',')) ip = ip.split(',')[0].trim();
@@ -62,7 +109,6 @@ app.post('/receive', async (req, res) => {
       }
     } catch (e) {}
 
-    // 存入数据库
     await pool.query(
       `INSERT INTO devices (udid, version, product, serial, ip, city, isp)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
@@ -71,25 +117,26 @@ app.post('/receive', async (req, res) => {
 
     console.log('✅ 收到设备并已存入 Neon');
 
-    // 🔥 临时：返回一个显示信息的网页，安装后自动跳转
-    const html = `
-      <!DOCTYPE html>
-      <html>
-      <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>设备信息已收到</title></head>
-      <body style="font-family: -apple-system, sans-serif; padding: 20px;">
-        <h2>✅ 设备信息已成功收集</h2>
-        <p><strong>UDID:</strong> ${deviceInfo.UDID || '无'}</p>
-        <p><strong>IP:</strong> ${ip}</p>
-        <p><strong>城市:</strong> ${geo.city}</p>
-        <p>此页面仅用于调试，成功后我们将改回无跳转版本。</p>
-      </body>
-      </html>
-    `;
-    res.send(html);
+    // 判断是否是真实设备请求（通常希望返回描述文件），还是测试请求
+    if (req.is('application/x-apple-aspen-config') || req.headers['user-agent']?.includes('Profile')) {
+      // 真实设备：返回 302 重定向到结果页
+      const udid = encodeURIComponent(deviceInfo.UDID || '无');
+      res.redirect(302, `/result?udid=${udid}&ip=${encodeURIComponent(ip)}&city=${encodeURIComponent(geo.city)}`);
+    } else {
+      // 测试请求：返回 JSON
+      res.json({ success: true, udid: deviceInfo.UDID, ip });
+    }
   } catch (error) {
     console.error('❌ 处理失败:', error);
-    res.status(500).send('处理失败，请查看服务器日志');
+    res.status(500).json({ error: error.message });
   }
+});
+
+// 结果页
+app.get('/result', (req, res) => {
+  const { udid, ip, city, error } = req.query;
+  if (error) return res.send('<h2>❌ 数据接收失败</h2>');
+  res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family: -apple-system, sans-serif; padding: 20px;"><h2>✅ 设备信息已成功收集</h2><p><strong>UDID:</strong> ${udid}</p><p><strong>IP:</strong> ${ip}</p><p><strong>城市:</strong> ${city}</p><p>调试完成后将恢复无跳转版本。</p></body></html>`);
 });
 
 // 查看所有数据
