@@ -7,12 +7,12 @@ const { Pool } = require('pg');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ 你的 Neon 数据库连接字符串
+// ✅ 你的 Neon 连接字符串（已加 uselibpqcompat=true）
 const pool = new Pool({
-  connectionString: 'postgresql://neondb_owner:npg_k5hlBvdIsPA4@ep-plain-dawn-ayjfr136-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require'
+  connectionString: 'postgresql://neondb_owner:npg_k5hlBvdIsPA4@ep-plain-dawn-ayjfr136-pooler.c-5.us-east-2.aws.neon.tech/neondb?sslmode=require&uselibpqcompat=true'
 });
 
-// 🔥 自动建表（如果表不存在就创建）
+// 🔥 自动建表（如果不存在则创建）
 async function initDB() {
   try {
     await pool.query(`
@@ -131,7 +131,7 @@ app.get('/devices', async (req, res) => {
   }
 });
 
-// 启动服务前先初始化数据库表
+// 启动服务前初始化数据库表
 initDB().then(() => {
   app.listen(PORT, () => {
     console.log(`✅ 服务运行在端口 ${PORT}`);
