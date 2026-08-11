@@ -34,19 +34,58 @@ async function initDB() {
 
 app.use(cors());
 app.use(express.text({ type: '*/*' }));
-app.use(express.json()); // 支持 JSON 格式的测试请求
 
-app.use((req, res, next) => {
-  if (req.path.endsWith('.mobileconfig')) {
-    res.setHeader('Content-Type', 'application/x-apple-aspen-config');
-    res.setHeader('Content-Disposition', 'attachment; filename="device.mobileconfig"');
-  }
-  next();
+// ✅ 直接把描述文件内容写死在路由里，确保能下载
+app.get('/profile.mobileconfig', (req, res) => {
+  const mobileconfig = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>PayloadContent</key>
+    <array>
+        <dict>
+            <key>PayloadType</key>
+            <string>com.apple.profile-service</string>
+            <key>PayloadVersion</key>
+            <integer>1</integer>
+            <key>PayloadUUID</key>
+            <string>3C4DC7D2-E475-3375-489C-0BB8D737A654</string>
+            <key>PayloadIdentifier</key>
+            <string>com.example.udid-collect</string>
+            <key>URL</key>
+            <string>https://jx-peizhi.onrender.com/receive</string>
+            <key>RequestAttributes</key>
+            <array>
+                <string>UDID</string>
+                <string>VERSION</string>
+                <string>PRODUCT</string>
+                <string>SERIAL</string>
+            </array>
+        </dict>
+    </array>
+    <key>PayloadDisplayName</key>
+    <string>Device Information</string>
+    <key>PayloadIdentifier</key>
+    <string>com.example.profile</string>
+    <key>PayloadUUID</key>
+    <string>3C4DC7D2-E475-3375-489C-0BB8D737A653</string>
+    <key>PayloadOrganization</key>
+    <string>Device Info Collector</string>
+    <key>PayloadVersion</key>
+    <integer>1</integer>
+    <key>PayloadType</key>
+    <string>Configuration</string>
+</dict>
+</plist>`;
+  res.setHeader('Content-Type', 'application/x-apple-aspen-config');
+  res.setHeader('Content-Disposition', 'attachment; filename="profile.mobileconfig"');
+  res.send(mobileconfig);
 });
 
+// 静态文件（保留，备用）
 app.use(express.static('.'));
 
-// 📱 手机测试页面（访问 /test 即可看到按钮）
+// 手机测试页面
 app.get('/test', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -69,7 +108,7 @@ app.get('/test', (req, res) => {
               body: xml
             });
             if (res.ok) {
-              status.innerHTML = '✅ 测试数据发送成功！<br>现在去 <a href="/devices">/devices</a> 查看，应该能看到一条 UDID 为 test-udid-99999 的数据。';
+              status.innerHTML = '✅ 测试数据发送成功！<br>现在去 <a href="/devices">/devices</a> 查看。';
             } else {
               status.textContent = '❌ 发送失败，状态码：' + res.status;
             }
@@ -83,17 +122,13 @@ app.get('/test', (req, res) => {
   `);
 });
 
-// 接收数据的核心接口（支持 XML 和 JSON 测试）
+// 接收设备数据
 app.post('/receive', async (req, res) => {
   try {
     let deviceInfo = {};
-    // 根据 Content-Type 解析
     if (req.is('application/x-apple-aspen-config') || req.is('text/*')) {
       deviceInfo = plist.parse(req.body);
-    } else if (req.is('application/json')) {
-      deviceInfo = req.body; // 来自测试页面的 JSON
     } else {
-      // 尝试作为 XML 解析
       deviceInfo = plist.parse(req.body);
     }
 
@@ -117,22 +152,16 @@ app.post('/receive', async (req, res) => {
 
     console.log('✅ 收到设备并已存入 Neon');
 
-    // 判断是否是真实设备请求（通常希望返回描述文件），还是测试请求
-    if (req.is('application/x-apple-aspen-config') || req.headers['user-agent']?.includes('Profile')) {
-      // 真实设备：返回 302 重定向到结果页
-      const udid = encodeURIComponent(deviceInfo.UDID || '无');
-      res.redirect(302, `/result?udid=${udid}&ip=${encodeURIComponent(ip)}&city=${encodeURIComponent(geo.city)}`);
-    } else {
-      // 测试请求：返回 JSON
-      res.json({ success: true, udid: deviceInfo.UDID, ip });
-    }
+    // 真实设备：302 重定向到结果页
+    const udid = encodeURIComponent(deviceInfo.UDID || '无');
+    res.redirect(302, `/result?udid=${udid}&ip=${encodeURIComponent(ip)}&city=${encodeURIComponent(geo.city)}`);
   } catch (error) {
     console.error('❌ 处理失败:', error);
-    res.status(500).json({ error: error.message });
+    res.redirect(302, '/result?error=1');
   }
 });
 
-// 结果页
+// 结果展示页
 app.get('/result', (req, res) => {
   const { udid, ip, city, error } = req.query;
   if (error) return res.send('<h2>❌ 数据接收失败</h2>');
@@ -147,6 +176,11 @@ app.get('/devices', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// 根路径友好提示
+app.get('/', (req, res) => {
+  res.send('<h2>✅ 服务运行中</h2><p>请使用正确的地址安装描述文件。</p>');
 });
 
 initDB().then(() => {
