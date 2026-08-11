@@ -35,12 +35,23 @@ async function initDB() {
 app.use(cors());
 app.use(express.text({ type: '*/*' }));
 
-// 首页提示
-app.get('/', (req, res) => {
-  res.send('<h2>✅ 服务运行中</h2><p>安装描述文件请用 Safari 打开: <a href="/install">点击这里</a> 或直接访问 /profile.mobileconfig</p>');
+// 🔍 全局请求日志（记录每一个请求，方便排查）
+app.use((req, res, next) => {
+  console.log(`📡 [${new Date().toISOString()}] ${req.method} ${req.path} 来源 IP: ${req.ip}`);
+  next();
 });
 
-// 安装引导页（解决部分浏览器无法直接下载的问题）
+// 首页
+app.get('/', (req, res) => {
+  res.send('<h2>✅ 服务运行中</h2><p>安装描述文件: <a href="/install">点击这里</a></p>');
+});
+
+// 连接检查（用于验证设备是否能连上服务器）
+app.get('/check', (req, res) => {
+  res.send('OK - 连接成功');
+});
+
+// 安装引导页
 app.get('/install', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -50,13 +61,13 @@ app.get('/install', (req, res) => {
       <h2>📲 安装描述文件</h2>
       <p>点击下面的按钮下载配置描述文件，然后去 <b>设置 → 通用 → VPN 与设备管理</b> 中安装。</p>
       <a href="/profile.mobileconfig" style="display:inline-block;padding:12px 24px;background:#007AFF;color:white;text-decoration:none;border-radius:8px;font-size:18px;">📥 下载描述文件</a>
-      <p style="margin-top:20px;color:gray;">如果无法下载，请复制以下链接到 Safari 打开：<br><code>https://jx-peizhi.onrender.com/profile.mobileconfig</code></p>
+      <p style="margin-top:20px;">如果无法下载，复制以下链接到 Safari 打开：<br><code>https://jx-peizhi.onrender.com/profile.mobileconfig</code></p>
     </body>
     </html>
   `);
 });
 
-// 核心：动态生成描述文件，确保 MIME 类型正确
+// 动态生成描述文件
 app.get('/profile.mobileconfig', (req, res) => {
   const mobileconfig = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -132,7 +143,7 @@ app.get('/test', (req, res) => {
 
 // 接收数据（增强日志）
 app.post('/receive', async (req, res) => {
-  console.log('📥 [接收] 收到 POST 请求');
+  console.log('📥 [接收] 收到 POST 请求，Body 长度:', req.body ? req.body.length : 0);
   try {
     let deviceInfo = {};
     if (req.is('application/x-apple-aspen-config') || req.is('text/*')) {
@@ -172,7 +183,7 @@ app.get('/result', (req, res) => {
   res.send(`<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body style="font-family:-apple-system,sans-serif;padding:20px;"><h2>✅ 设备信息已收集</h2><p><strong>UDID:</strong> ${udid}</p><p><strong>IP:</strong> ${ip}</p><p><strong>城市:</strong> ${city}</p></body></html>`);
 });
 
-// 数据查看
+// 查看数据
 app.get('/devices', async (req, res) => {
   try {
     const result = await pool.query('SELECT * FROM devices ORDER BY received_at DESC');
